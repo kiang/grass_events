@@ -293,7 +293,10 @@
         const current = new Date(start);
 
         while (current <= end) {
-            dates.push(current.toISOString().slice(0, 10));
+            const yy = current.getFullYear();
+            const mm = String(current.getMonth() + 1).padStart(2, '0');
+            const dd = String(current.getDate()).padStart(2, '0');
+            dates.push(`${yy}-${mm}-${dd}`);
             switch (frequency) {
                 case 'daily': current.setDate(current.getDate() + 1); break;
                 case 'weekly': current.setDate(current.getDate() + 7); break;
