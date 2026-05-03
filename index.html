@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小草連線競選活動管理</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>小草連線競選活動管理</h1>
+            <div class="header-actions">
+                <button id="btn-plan" class="btn btn-primary">+ 新增計畫</button>
+                <button id="btn-record" class="btn btn-success">+ 回報活動</button>
+            </div>
+        </header>
+
+        <div class="calendar-controls">
+            <button id="prev-month" class="btn btn-icon">&laquo;</button>
+            <h2 id="current-month"></h2>
+            <button id="next-month" class="btn btn-icon">&raquo;</button>
+            <button id="btn-today" class="btn btn-small">今天</button>
+        </div>
+
+        <div class="calendar-wrapper">
+            <div class="calendar">
+                <div class="calendar-header">
+                    <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+                </div>
+                <div id="calendar-body" class="calendar-body"></div>
+            </div>
+        </div>
+
+        <div id="day-events" class="day-events-panel" style="display:none;">
+            <div class="day-events-header">
+                <h3 id="day-events-title"></h3>
+                <button id="close-day-events" class="btn btn-icon">&times;</button>
+            </div>
+            <div id="day-events-list"></div>
+        </div>
+    </div>
+
+    <!-- Planning Modal -->
+    <div id="modal-plan" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>新增活動計畫</h3>
+                <button class="modal-close btn btn-icon">&times;</button>
+            </div>
+            <form id="form-plan">
+                <div class="form-group">
+                    <label for="plan-candidate">參選人姓名 *</label>
+                    <select id="plan-candidate" required>
+                        <option value="">請選擇</option>
+                        <option value="江明宗">江明宗</option>
+                        <option value="蕭漍華">蕭漍華</option>
+                        <option value="郭如芳">郭如芳</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>活動類型 *</label>
+                    <div class="radio-group">
+                        <label><input type="radio" name="plan-type" value="拜會行程" required> 拜會行程</label>
+                        <label><input type="radio" name="plan-type" value="街口街講"> 街口街講</label>
+                        <label><input type="radio" name="plan-type" value="選民見面會"> 選民見面會</label>
+                        <label><input type="radio" name="plan-type" value="辦理活動"> 辦理活動</label>
+                        <label><input type="radio" name="plan-type" value="其他"> 其他</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="plan-date">活動預計日期 *</label>
+                    <input type="date" id="plan-date" required>
+                </div>
+                <div class="form-group">
+                    <label for="plan-description">活動簡單描述 *</label>
+                    <textarea id="plan-description" rows="4" placeholder="預計時間地點、會見地方頭人姓名、活動內容、活動參加人數等" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="plan-budget">預計活動使用經費 *</label>
+                    <textarea id="plan-budget" rows="2" required></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary modal-close">取消</button>
+                    <button type="submit" class="btn btn-primary">儲存並提交</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Record Modal -->
+    <div id="modal-record" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>活動回報</h3>
+                <button class="modal-close btn btn-icon">&times;</button>
+            </div>
+            <form id="form-record">
+                <div class="form-group">
+                    <label for="record-candidate">參選人姓名 *</label>
+                    <select id="record-candidate" required>
+                        <option value="">請選擇</option>
+                        <option value="江明宗">江明宗</option>
+                        <option value="蕭漍華">蕭漍華</option>
+                        <option value="郭如芳">郭如芳</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>活動類型 *</label>
+                    <div class="radio-group">
+                        <label><input type="radio" name="record-type" value="拜會行程" required> 拜會行程</label>
+                        <label><input type="radio" name="record-type" value="街口街講"> 街口街講</label>
+                        <label><input type="radio" name="record-type" value="選民見面會"> 選民見面會</label>
+                        <label><input type="radio" name="record-type" value="辦理活動"> 辦理活動</label>
+                        <label><input type="radio" name="record-type" value="其他"> 其他</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="record-date">活動日期 *</label>
+                    <input type="date" id="record-date" required>
+                </div>
+                <div class="form-group">
+                    <label for="record-description">活動簡單描述 *</label>
+                    <textarea id="record-description" rows="4" placeholder="時間地點、會見地方頭人姓名、活動內容、活動參加人數等" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="record-budget">活動使用經費 *</label>
+                    <textarea id="record-budget" rows="2" placeholder="簡述項目費用" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="record-feedback">活動回饋或後續需追蹤部分 *</label>
+                    <textarea id="record-feedback" rows="3" placeholder="簡述" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="record-link">臉書粉專活動連結 *</label>
+                    <input type="url" id="record-link" placeholder="https://www.facebook.com/..." required>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary modal-close">取消</button>
+                    <button type="submit" class="btn btn-success">儲存並提交</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Event Detail Modal -->
+    <div id="modal-detail" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="detail-title"></h3>
+                <button class="modal-close btn btn-icon">&times;</button>
+            </div>
+            <div id="detail-body"></div>
+            <div class="form-actions">
+                <button id="btn-delete-event" class="btn btn-danger">刪除</button>
+                <button id="btn-convert-to-record" class="btn btn-success" style="display:none;">轉為回報</button>
+                <button class="btn btn-secondary modal-close">關閉</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast"></div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
