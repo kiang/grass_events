@@ -682,6 +682,19 @@
         reader.readAsText(file);
     }
 
+    function clearAllEvents() {
+        if (events.length === 0) {
+            showToast('目前沒有任何資料', 'error');
+            return;
+        }
+        if (!confirm(`確定要清除全部 ${events.length} 筆資料？此操作無法復原。`)) return;
+        events = [];
+        saveEvents();
+        renderCalendar();
+        document.getElementById('day-events').style.display = 'none';
+        showToast('已清除全部資料', 'success');
+    }
+
     // Bindings
     function bindEvents() {
         document.getElementById('prev-month').addEventListener('click', () => {
@@ -743,6 +756,7 @@
 
         document.getElementById('btn-export').addEventListener('click', exportEvents);
         document.getElementById('btn-import').addEventListener('change', importEvents);
+        document.getElementById('btn-clear').addEventListener('click', clearAllEvents);
 
         document.querySelectorAll('.modal-close').forEach(btn => {
             btn.addEventListener('click', () => {
