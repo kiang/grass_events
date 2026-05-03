@@ -23,13 +23,32 @@
         link: 'entry.362614619'
     };
 
+    const TZ_OFFSET = 8 * 60;
+
+    function nowTW() {
+        const now = new Date();
+        const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+        return new Date(utc + TZ_OFFSET * 60000);
+    }
+
+    function parseDateTW(dateStr) {
+        return new Date(dateStr + 'T00:00:00+08:00');
+    }
+
+    function toLocalDateStr(d) {
+        const yy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yy}-${mm}-${dd}`;
+    }
+
     let currentYear, currentMonth;
     let events = [];
     let selectedEventId = null;
 
     function init() {
         loadEvents();
-        const today = new Date();
+        const today = nowTW();
         currentYear = today.getFullYear();
         currentMonth = today.getMonth();
         renderCalendar();
@@ -74,8 +93,8 @@
     }
 
     function formatDate(dateStr) {
-        const d = new Date(dateStr + 'T00:00:00');
-        return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+        const d = parseDateTW(dateStr);
+        return `${d.getUTCFullYear()}/${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
     }
 
     // Calendar rendering
@@ -90,8 +109,8 @@
         const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
         const prevMonthDays = new Date(currentYear, currentMonth, 0).getDate();
 
-        const today = new Date();
-        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        const today = nowTW();
+        const todayStr = toLocalDateStr(today);
 
         const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
 
@@ -288,20 +307,20 @@
 
     function generateDates(startDate, endDate, frequency) {
         const dates = [];
-        const start = new Date(startDate + 'T00:00:00');
-        const end = new Date(endDate + 'T00:00:00');
+        const start = parseDateTW(startDate);
+        const end = parseDateTW(endDate);
         const current = new Date(start);
 
         while (current <= end) {
-            const yy = current.getFullYear();
-            const mm = String(current.getMonth() + 1).padStart(2, '0');
-            const dd = String(current.getDate()).padStart(2, '0');
+            const yy = current.getUTCFullYear();
+            const mm = String(current.getUTCMonth() + 1).padStart(2, '0');
+            const dd = String(current.getUTCDate()).padStart(2, '0');
             dates.push(`${yy}-${mm}-${dd}`);
             switch (frequency) {
-                case 'daily': current.setDate(current.getDate() + 1); break;
-                case 'weekly': current.setDate(current.getDate() + 7); break;
-                case 'biweekly': current.setDate(current.getDate() + 14); break;
-                case 'monthly': current.setMonth(current.getMonth() + 1); break;
+                case 'daily': current.setUTCDate(current.getUTCDate() + 1); break;
+                case 'weekly': current.setUTCDate(current.getUTCDate() + 7); break;
+                case 'biweekly': current.setUTCDate(current.getUTCDate() + 14); break;
+                case 'monthly': current.setUTCMonth(current.getUTCMonth() + 1); break;
             }
         }
         return dates;
@@ -409,7 +428,7 @@
                 description,
                 budget,
                 submitted: false,
-                createdAt: new Date().toISOString()
+                createdAt: nowTW().toISOString()
             };
 
             const dup = findDuplicate(data);
@@ -496,7 +515,7 @@
             feedback: form.querySelector('#record-feedback').value.trim(),
             link: form.querySelector('#record-link').value.trim(),
             submitted: false,
-            createdAt: new Date().toISOString()
+            createdAt: nowTW().toISOString()
         };
 
         if (!data.candidate || !data.type || !data.date || !data.description || !data.budget || !data.feedback || !data.link) {
@@ -617,7 +636,7 @@
         });
 
         document.getElementById('btn-today').addEventListener('click', () => {
-            const today = new Date();
+            const today = nowTW();
             currentYear = today.getFullYear();
             currentMonth = today.getMonth();
             renderCalendar();
