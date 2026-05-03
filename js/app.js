@@ -34,6 +34,7 @@
         currentMonth = today.getMonth();
         renderCalendar();
         bindEvents();
+        initRepeatToggle();
     }
 
     function loadEvents() {
@@ -268,60 +269,194 @@
         };
     }
 
+    function generateDates(startDate, endDate, frequency) {
+        const dates = [];
+        const start = new Date(startDate + 'T00:00:00');
+        const end = new Date(endDate + 'T00:00:00');
+        const current = new Date(start);
+
+        while (current <= end) {
+            dates.push(current.toISOString().slice(0, 10));
+            switch (frequency) {
+                case 'daily': current.setDate(current.getDate() + 1); break;
+                case 'weekly': current.setDate(current.getDate() + 7); break;
+                case 'biweekly': current.setDate(current.getDate() + 14); break;
+                case 'monthly': current.setMonth(current.getMonth() + 1); break;
+            }
+        }
+        return dates;
+    }
+
+    function updateRepeatPreview() {
+        const preview = document.getElementById('repeat-preview');
+        const startDate = document.getElementById('plan-date').value;
+        const endDate = document.getElementById('plan-date-end').value;
+        const frequency = document.getElementById('plan-frequency').value;
+
+        if (!startDate || !endDate) {
+            preview.innerHTML = '';
+            return;
+        }
+
+        if (endDate < startDate) {
+            preview.innerHTML = '<span style="color:var(--danger)">結束日期不可早於開始日期</span>';
+            return;
+        }
+
+        const freqLabels = { daily: '每天', weekly: '每週', biweekly: '每兩週', monthly: '每月' };
+        const dates = generateDates(startDate, endDate, frequency);
+        preview.innerHTML = `<div class="preview-count">${freqLabels[frequency]}，共 ${dates.length} 筆活動</div>` +
+            dates.map(d => formatDate(d)).join('、');
+    }
+
+    function initRepeatToggle() {
+        const checkbox = document.getElementById('plan-repeat');
+        const options = document.getElementById('repeat-options');
+
+        checkbox.addEventListener('change', () => {
+            options.style.display = checkbox.checked ? 'block' : 'none';
+            if (checkbox.checked) updateRepeatPreview();
+        });
+
+        ['plan-date', 'plan-date-end', 'plan-frequency'].forEach(id => {
+            document.getElementById(id).addEventListener('change', updateRepeatPreview);
+        });
+    }
+
     async function handlePlanSubmit(e) {
         e.preventDefault();
         const form = e.target;
-        const data = {
-            id: generateId(),
-            formType: 'plan',
-            candidate: form.querySelector('#plan-candidate').value,
-            type: form.querySelector('input[name="plan-type"]:checked')?.value,
-            date: form.querySelector('#plan-date').value,
-            description: form.querySelector('#plan-description').value.trim(),
-            budget: form.querySelector('#plan-budget').value.trim(),
-            submitted: false,
-            createdAt: new Date().toISOString()
-        };
+        const candidate = form.querySelector('#plan-candidate').value;
+        const type = form.querySelector('input[name="plan-type"]:checked')?.value;
+        const startDate = form.querySelector('#plan-date').value;
+        const description = form.querySelector('#plan-description').value.trim();
+        const budget = form.querySelector('#plan-budget').value.trim();
+        const isRepeat = form.querySelector('#plan-repeat').checked;
 
-        if (!data.candidate || !data.type || !data.date || !data.description || !data.budget) {
+        if (!candidate || !type || !startDate || !description || !budget) {
             showToast('請填寫所有必填欄位', 'error');
             return;
         }
 
-        const dup = findDuplicate(data);
-        if (dup) {
-            showToast('此活動計畫已存在，請勿重複提交', 'error');
-            return;
+        let dates;
+        if (isRepeat) {
+            const endDate = form.querySelector('#plan-date-end').value;
+            const frequency = form.querySelector('#plan-frequency').value;
+            if (!endDate) {
+                showToast('請填寫結束日期', 'error');
+                return;
+            }
+            if (endDate < startDate) {
+                showToast('結束日期不可早於開始日期', 'error');
+                return;
+            }
+            dates = generateDates(startDate, endDate, frequency);
+        } else {
+            dates = [startDate];
         }
 
-        const params = {
-            [PLAN_FIELDS.candidate]: data.candidate,
-            [PLAN_FIELDS.type]: data.type,
-            ...buildDateParams(PLAN_FIELDS.date, data.date),
-            [PLAN_FIELDS.description]: data.description,
-            [PLAN_FIELDS.budget]: data.budget
-        };
-
         const submitBtn = form.querySelector('button[type="submit"]');
+        const cancelBtn = form.querySelector('.modal-close');
         submitBtn.disabled = true;
-        submitBtn.textContent = '提交中...';
+        cancelBtn.disabled = true;
 
-        const ok = await submitToGoogleForm(PLAN_FORM_URL, params);
-        data.submitted = ok;
-        events.push(data);
-        saveEvents();
+        const progressContainer = document.getElementById('plan-progress-container');
+        const progressText = document.getElementById('plan-progress-text');
+        const progressCount = document.getElementById('plan-progress-count');
+        const progressFill = document.getElementById('plan-progress-fill');
+        const progressLog = document.getElementById('plan-progress-log');
+
+        if (dates.length > 1) {
+            progressContainer.style.display = 'block';
+            progressFill.style.width = '0%';
+            progressLog.innerHTML = '';
+            progressText.textContent = '提交中...';
+            progressCount.textContent = `0 / ${dates.length}`;
+        } else {
+            submitBtn.textContent = '提交中...';
+        }
+
+        let okCount = 0, skipCount = 0, errCount = 0;
+
+        for (let i = 0; i < dates.length; i++) {
+            const dateStr = dates[i];
+            const data = {
+                id: generateId(),
+                formType: 'plan',
+                candidate,
+                type,
+                date: dateStr,
+                description,
+                budget,
+                submitted: false,
+                createdAt: new Date().toISOString()
+            };
+
+            const dup = findDuplicate(data);
+            if (dup) {
+                skipCount++;
+                if (dates.length > 1) {
+                    progressLog.innerHTML += `<div class="log-skip">${formatDate(dateStr)} — 已存在，略過</div>`;
+                    progressLog.scrollTop = progressLog.scrollHeight;
+                }
+            } else {
+                const params = {
+                    [PLAN_FIELDS.candidate]: data.candidate,
+                    [PLAN_FIELDS.type]: data.type,
+                    ...buildDateParams(PLAN_FIELDS.date, dateStr),
+                    [PLAN_FIELDS.description]: data.description,
+                    [PLAN_FIELDS.budget]: data.budget
+                };
+
+                const ok = await submitToGoogleForm(PLAN_FORM_URL, params);
+                data.submitted = ok;
+                events.push(data);
+                saveEvents();
+
+                if (ok) {
+                    okCount++;
+                    if (dates.length > 1) {
+                        progressLog.innerHTML += `<div class="log-ok">${formatDate(dateStr)} — 提交成功</div>`;
+                    }
+                } else {
+                    errCount++;
+                    if (dates.length > 1) {
+                        progressLog.innerHTML += `<div class="log-err">${formatDate(dateStr)} — 提交失敗（已儲存本地）</div>`;
+                    }
+                }
+                if (dates.length > 1) progressLog.scrollTop = progressLog.scrollHeight;
+            }
+
+            if (dates.length > 1) {
+                const pct = Math.round(((i + 1) / dates.length) * 100);
+                progressFill.style.width = pct + '%';
+                progressCount.textContent = `${i + 1} / ${dates.length}`;
+            }
+        }
 
         submitBtn.disabled = false;
+        cancelBtn.disabled = false;
         submitBtn.textContent = '儲存並提交';
-
-        closeModal('modal-plan');
-        form.reset();
         renderCalendar();
 
-        if (ok) {
-            showToast('計畫已儲存並提交至 Google 表單', 'success');
+        if (dates.length === 1) {
+            closeModal('modal-plan');
+            form.reset();
+            progressContainer.style.display = 'none';
+            if (skipCount) {
+                showToast('此活動計畫已存在，請勿重複提交', 'error');
+            } else if (okCount) {
+                showToast('計畫已儲存並提交至 Google 表單', 'success');
+            } else {
+                showToast('已儲存本地，但提交 Google 表單失敗', 'error');
+            }
         } else {
-            showToast('已儲存本地，但提交 Google 表單失敗', 'error');
+            progressText.textContent = '完成！';
+            const parts = [];
+            if (okCount) parts.push(`${okCount} 筆成功`);
+            if (skipCount) parts.push(`${skipCount} 筆略過（重複）`);
+            if (errCount) parts.push(`${errCount} 筆失敗`);
+            showToast(`批次提交完成：${parts.join('、')}`, errCount ? 'error' : 'success');
         }
     }
 
@@ -447,6 +582,9 @@
 
         document.getElementById('btn-plan').addEventListener('click', () => {
             document.getElementById('form-plan').reset();
+            document.getElementById('repeat-options').style.display = 'none';
+            document.getElementById('plan-progress-container').style.display = 'none';
+            document.getElementById('repeat-preview').innerHTML = '';
             openModal('modal-plan');
         });
 

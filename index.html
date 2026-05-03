@@ -73,6 +73,37 @@
                     <input type="date" id="plan-date" required>
                 </div>
                 <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="plan-repeat"> 重複活動
+                    </label>
+                </div>
+                <div id="repeat-options" class="repeat-options" style="display:none;">
+                    <div class="form-group">
+                        <label for="plan-frequency">重複頻率 *</label>
+                        <select id="plan-frequency">
+                            <option value="daily">每天</option>
+                            <option value="weekly" selected>每週</option>
+                            <option value="biweekly">每兩週</option>
+                            <option value="monthly">每月</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="plan-date-end">結束日期 *</label>
+                        <input type="date" id="plan-date-end">
+                    </div>
+                    <div id="repeat-preview" class="repeat-preview"></div>
+                </div>
+                <div id="plan-progress-container" class="progress-container" style="display:none;">
+                    <div class="progress-header">
+                        <span id="plan-progress-text">提交中...</span>
+                        <span id="plan-progress-count"></span>
+                    </div>
+                    <div class="progress-bar">
+                        <div id="plan-progress-fill" class="progress-fill"></div>
+                    </div>
+                    <div id="plan-progress-log" class="progress-log"></div>
+                </div>
+                <div class="form-group">
                     <label for="plan-description">活動簡單描述 *</label>
                     <textarea id="plan-description" rows="4" placeholder="預計時間地點、會見地方頭人姓名、活動內容、活動參加人數等" required></textarea>
                 </div>

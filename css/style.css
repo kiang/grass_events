@@ -400,6 +400,86 @@ header h1 {
 .toast.error { background: var(--danger); }
 .toast.success { background: var(--primary); }
 
+/* Repeat options */
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.repeat-options {
+    background: #f9f9f9;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+    margin-bottom: 16px;
+}
+
+.repeat-preview {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    margin-top: 8px;
+    max-height: 80px;
+    overflow-y: auto;
+}
+
+.repeat-preview .preview-count {
+    font-weight: 600;
+    color: var(--primary-dark);
+    margin-bottom: 4px;
+}
+
+/* Progress bar */
+.progress-container {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: #f9f9f9;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.progress-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.progress-bar {
+    height: 20px;
+    background: var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--primary);
+    border-radius: 10px;
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+.progress-fill.has-errors {
+    background: linear-gradient(90deg, var(--primary) var(--success-pct), var(--danger) var(--success-pct));
+}
+
+.progress-log {
+    margin-top: 8px;
+    max-height: 100px;
+    overflow-y: auto;
+    font-size: 0.75rem;
+    line-height: 1.6;
+}
+
+.progress-log .log-ok { color: var(--primary-dark); }
+.progress-log .log-err { color: var(--danger); }
+.progress-log .log-skip { color: #e65100; }
+
 /* Responsive */
 @media (max-width: 600px) {
     header { flex-direction: column; align-items: flex-start; }
