@@ -127,6 +127,14 @@
                 <button class="modal-close btn btn-icon">&times;</button>
             </div>
             <form id="form-record">
+                <input type="hidden" id="record-from-plan" value="">
+                <div class="form-group">
+                    <label for="record-plan-picker">從計畫帶入資料</label>
+                    <select id="record-plan-picker">
+                        <option value="">— 手動填寫 —</option>
+                    </select>
+                </div>
+                <hr class="form-divider">
                 <div class="form-group">
                     <label for="record-candidate">參選人姓名 *</label>
                     <select id="record-candidate" required>

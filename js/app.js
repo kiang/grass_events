@@ -49,8 +49,11 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
     }
 
-    function generateId() {
-        return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    function generateUUID() {
+        if (crypto.randomUUID) return crypto.randomUUID();
+        return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, c =>
+            (+c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> +c / 4).toString(16)
+        );
     }
 
     function findDuplicate(eventData) {
@@ -188,6 +191,10 @@
 
         let html = `
             <div class="detail-row">
+                <div class="detail-label">UUID</div>
+                <div class="detail-value detail-uuid">${escapeHtml(ev.id)}</div>
+            </div>
+            <div class="detail-row">
                 <div class="detail-label">狀態</div>
                 <div class="detail-value"><span class="detail-status ${statusClass}">${statusText}</span></div>
             </div>
@@ -214,6 +221,16 @@
         `;
 
         if (ev.formType === 'record') {
+            if (ev.planId) {
+                const plan = events.find(p => p.id === ev.planId);
+                const planLabel = plan ? `${formatDate(plan.date)} ${plan.candidate} - ${plan.type}` : ev.planId;
+                html += `
+                    <div class="detail-row">
+                        <div class="detail-label">來源計畫</div>
+                        <div class="detail-value">${escapeHtml(planLabel)}</div>
+                    </div>
+                `;
+            }
             html += `
                 <div class="detail-row">
                     <div class="detail-label">活動回饋</div>
@@ -381,7 +398,7 @@
         for (let i = 0; i < dates.length; i++) {
             const dateStr = dates[i];
             const data = {
-                id: generateId(),
+                id: generateUUID(),
                 formType: 'plan',
                 candidate,
                 type,
@@ -463,9 +480,11 @@
     async function handleRecordSubmit(e) {
         e.preventDefault();
         const form = e.target;
+        const fromPlanId = form.querySelector('#record-from-plan').value || null;
         const data = {
-            id: generateId(),
+            id: generateUUID(),
             formType: 'record',
+            planId: fromPlanId,
             candidate: form.querySelector('#record-candidate').value,
             type: form.querySelector('input[name="record-type"]:checked')?.value,
             date: form.querySelector('#record-date').value,
@@ -521,13 +540,22 @@
         }
     }
 
-    function convertToRecord(planId) {
-        const plan = events.find(e => e.id === planId);
-        if (!plan) return;
+    function populatePlanPicker(selectedPlanId) {
+        const picker = document.getElementById('record-plan-picker');
+        const plans = events.filter(e => e.formType === 'plan').sort((a, b) => a.date.localeCompare(b.date));
+        picker.innerHTML = '<option value="">— 手動填寫 —</option>';
+        plans.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = `${formatDate(p.date)} ${p.candidate} - ${p.type}`;
+            if (p.id === selectedPlanId) opt.selected = true;
+            picker.appendChild(opt);
+        });
+    }
 
-        closeModal('modal-detail');
-
+    function fillRecordFromPlan(plan) {
         const form = document.getElementById('form-record');
+        form.querySelector('#record-from-plan').value = plan.id;
         form.querySelector('#record-candidate').value = plan.candidate;
 
         const radioBtn = form.querySelector(`input[name="record-type"][value="${plan.type}"]`);
@@ -536,6 +564,18 @@
         form.querySelector('#record-date').value = plan.date;
         form.querySelector('#record-description').value = plan.description;
         form.querySelector('#record-budget').value = plan.budget;
+    }
+
+    function convertToRecord(planId) {
+        const plan = events.find(e => e.id === planId);
+        if (!plan) return;
+
+        closeModal('modal-detail');
+
+        const form = document.getElementById('form-record');
+        form.reset();
+        populatePlanPicker(planId);
+        fillRecordFromPlan(plan);
 
         openModal('modal-record');
     }
@@ -590,7 +630,17 @@
 
         document.getElementById('btn-record').addEventListener('click', () => {
             document.getElementById('form-record').reset();
+            document.getElementById('record-from-plan').value = '';
+            populatePlanPicker();
             openModal('modal-record');
+        });
+
+        document.getElementById('record-plan-picker').addEventListener('change', (e) => {
+            const planId = e.target.value;
+            if (!planId) return;
+            const plan = events.find(ev => ev.id === planId);
+            if (!plan) return;
+            fillRecordFromPlan(plan);
         });
 
         document.getElementById('close-day-events').addEventListener('click', () => {

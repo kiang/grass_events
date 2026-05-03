@@ -400,6 +400,19 @@ header h1 {
 .toast.error { background: var(--danger); }
 .toast.success { background: var(--primary); }
 
+.detail-uuid {
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: var(--text-light);
+    word-break: break-all;
+}
+
+.form-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 12px 0 16px;
+}
+
 /* Repeat options */
 .checkbox-label {
     display: flex;
