@@ -621,6 +621,67 @@
         document.getElementById(id).classList.remove('active');
     }
 
+    function exportEvents() {
+        if (events.length === 0) {
+            showToast('沒有資料可匯出', 'error');
+            return;
+        }
+        const blob = new Blob([JSON.stringify(events, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const today = toLocalDateStr(nowTW());
+        a.href = url;
+        a.download = `grass_events_${today}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast(`已匯出 ${events.length} 筆資料`, 'success');
+    }
+
+    function importEvents(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        e.target.value = '';
+
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            let imported;
+            try {
+                imported = JSON.parse(ev.target.result);
+            } catch {
+                showToast('檔案格式錯誤，請選擇有效的 JSON 檔案', 'error');
+                return;
+            }
+
+            if (!Array.isArray(imported)) {
+                showToast('檔案格式錯誤，預期為陣列', 'error');
+                return;
+            }
+
+            let addedCount = 0, skipCount = 0;
+            for (const item of imported) {
+                if (!item.id || !item.formType || !item.date) {
+                    skipCount++;
+                    continue;
+                }
+                if (events.some(existing => existing.id === item.id)) {
+                    skipCount++;
+                    continue;
+                }
+                events.push(item);
+                addedCount++;
+            }
+
+            saveEvents();
+            renderCalendar();
+
+            const parts = [];
+            if (addedCount) parts.push(`${addedCount} 筆匯入`);
+            if (skipCount) parts.push(`${skipCount} 筆略過（重複或無效）`);
+            showToast(parts.join('、'), addedCount ? 'success' : 'error');
+        };
+        reader.readAsText(file);
+    }
+
     // Bindings
     function bindEvents() {
         document.getElementById('prev-month').addEventListener('click', () => {
@@ -679,6 +740,9 @@
         document.getElementById('btn-convert-to-record').addEventListener('click', () => {
             if (selectedEventId) convertToRecord(selectedEventId);
         });
+
+        document.getElementById('btn-export').addEventListener('click', exportEvents);
+        document.getElementById('btn-import').addEventListener('change', importEvents);
 
         document.querySelectorAll('.modal-close').forEach(btn => {
             btn.addEventListener('click', () => {
