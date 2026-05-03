@@ -32,7 +32,7 @@
     }
 
     function parseDateTW(dateStr) {
-        return new Date(dateStr + 'T00:00:00+08:00');
+        return new Date(dateStr + 'T00:00:00Z');
     }
 
     function toLocalDateStr(d) {
