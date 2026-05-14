@@ -78,9 +78,6 @@ header h1 {
 }
 .btn-icon:hover { color: var(--text); }
 .btn-small { font-size: 0.8rem; padding: 4px 12px; background: var(--border); border-radius: var(--radius); cursor: pointer; }
-.btn-import-label { display: inline-block; margin: 0; }
-.btn-danger-outline { background: #fff; color: var(--danger); border: 1px solid var(--danger); }
-.btn-danger-outline:hover { background: var(--danger); color: #fff; }
 
 .calendar-controls {
     display: flex;

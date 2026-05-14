@@ -13,12 +13,7 @@
             <div class="header-actions">
                 <button id="btn-plan" class="btn btn-primary">+ 新增計畫</button>
                 <button id="btn-record" class="btn btn-success">+ 回報活動</button>
-                <button id="btn-export" class="btn btn-small">匯出</button>
-                <label class="btn btn-small btn-import-label">
-                    匯入
-                    <input type="file" id="btn-import" accept=".json" style="display:none;">
-                </label>
-                <button id="btn-clear" class="btn btn-small btn-danger-outline">清除全部</button>
+                <button id="btn-refresh" class="btn btn-small">重新載入</button>
             </div>
         </header>
 
@@ -182,7 +177,7 @@
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary modal-close">取消</button>
-                    <button type="submit" class="btn btn-success">儲存並提交</button>
+                    <button type="submit" class="btn btn-success">提交至 Google 表單</button>
                 </div>
             </form>
         </div>
@@ -197,7 +192,7 @@
             </div>
             <div id="detail-body"></div>
             <div class="form-actions">
-                <button id="btn-delete-event" class="btn btn-danger">刪除</button>
+                <button id="btn-delete-event" class="btn btn-danger" style="display:none;">刪除</button>
                 <button id="btn-convert-to-record" class="btn btn-success" style="display:none;">轉為回報</button>
                 <button class="btn btn-secondary modal-close">關閉</button>
             </div>

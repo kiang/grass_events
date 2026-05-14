@@ -1,8 +1,8 @@
 (() => {
     'use strict';
 
-    const RECORD_STORAGE_KEY = 'grass_events_records';
     const PLAN_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3htbbMcKTpcXNGMDDyhWwhd5LMvwn_d7eNFbNgKopQ90ysXeECP4687bLs5x-jCpi-5NTtcLxRFk7/pub?output=csv';
+    const RECORD_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSlDLkhpZkNZvmb0IS-Lla5dXmCwSx-KmAsgM14NjaZgIyWMMq-SsKwekcqXYeg4V0eyJnqlzGokB_e/pub?output=csv';
     const PLAN_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScpQgzx5xqgRLCu-7iKLCC4ph_cfCs1LNleJOOm7P63XnzaUg/formResponse';
     const RECORD_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScU3m-bGBen71ZKuH2RIQURd2Fszd2Cryp_n7Xl0sLkwXaclQ/formResponse';
 
@@ -53,8 +53,7 @@
     }
 
     async function init() {
-        loadRecords();
-        await fetchPlans();
+        await Promise.all([fetchPlans(), fetchRecords()]);
         const today = nowTW();
         currentYear = today.getFullYear();
         currentMonth = today.getMonth();
@@ -147,23 +146,45 @@
         }
     }
 
-    function loadRecords() {
+    async function fetchRecords() {
         try {
-            records = JSON.parse(localStorage.getItem(RECORD_STORAGE_KEY) || '[]');
+            const res = await fetch(RECORD_CSV_URL);
+            if (!res.ok) throw new Error('fetch failed');
+            const text = await res.text();
+            const rows = parseCSV(text);
+            if (rows.length < 2) { records = []; return; }
+
+            records = [];
+            for (let i = 1; i < rows.length; i++) {
+                const r = rows[i];
+                if (r.length < 8) continue;
+                const timestamp = r[0];
+                const candidate = r[1];
+                const type = r[2];
+                const date = normalizeDateStr(r[3]);
+                const description = r[4];
+                const budget = r[5];
+                const feedback = r[6];
+                const link = r[7];
+
+                records.push({
+                    id: 'record-' + i + '-' + date + '-' + candidate,
+                    formType: 'record',
+                    candidate,
+                    type,
+                    date,
+                    description,
+                    budget,
+                    feedback,
+                    link,
+                    timestamp,
+                    submitted: true
+                });
+            }
         } catch {
             records = [];
+            showToast('無法載入回報資料，請檢查網路連線', 'error');
         }
-    }
-
-    function saveRecords() {
-        localStorage.setItem(RECORD_STORAGE_KEY, JSON.stringify(records));
-    }
-
-    function generateUUID() {
-        if (crypto.randomUUID) return crypto.randomUUID();
-        return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, c =>
-            (+c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> +c / 4).toString(16)
-        );
     }
 
     function findDuplicatePlan(candidate, type, date, description) {
@@ -313,28 +334,17 @@
             </div>
         `;
 
-        if (ev.formType === 'plan') {
+        html += `
+            <div class="detail-row">
+                <div class="detail-label">狀態</div>
+                <div class="detail-value"><span class="detail-status status-submitted">來自 Google 試算表</span></div>
+            </div>
+        `;
+        if (ev.timestamp) {
             html += `
                 <div class="detail-row">
-                    <div class="detail-label">狀態</div>
-                    <div class="detail-value"><span class="detail-status status-submitted">來自 Google 試算表</span></div>
-                </div>
-            `;
-            if (ev.timestamp) {
-                html += `
-                    <div class="detail-row">
-                        <div class="detail-label">提交時間</div>
-                        <div class="detail-value">${escapeHtml(ev.timestamp)}</div>
-                    </div>
-                `;
-            }
-        } else {
-            const statusClass = ev.submitted ? 'status-submitted' : 'status-local';
-            const statusText = ev.submitted ? '已提交 Google 表單' : '僅儲存本地';
-            html += `
-                <div class="detail-row">
-                    <div class="detail-label">狀態</div>
-                    <div class="detail-value"><span class="detail-status ${statusClass}">${statusText}</span></div>
+                    <div class="detail-label">提交時間</div>
+                    <div class="detail-value">${escapeHtml(ev.timestamp)}</div>
                 </div>
             `;
         }
@@ -390,8 +400,7 @@
         const convertBtn = document.getElementById('btn-convert-to-record');
         convertBtn.style.display = ev.formType === 'plan' ? '' : 'none';
 
-        const deleteBtn = document.getElementById('btn-delete-event');
-        deleteBtn.style.display = ev.formType === 'record' ? '' : 'none';
+        document.getElementById('btn-delete-event').style.display = 'none';
 
         openModal('modal-detail');
     }
@@ -618,41 +627,33 @@
     async function handleRecordSubmit(e) {
         e.preventDefault();
         const form = e.target;
-        const fromPlanId = form.querySelector('#record-from-plan').value || null;
-        const data = {
-            id: generateUUID(),
-            formType: 'record',
-            planId: fromPlanId,
-            candidate: form.querySelector('#record-candidate').value,
-            type: form.querySelector('input[name="record-type"]:checked')?.value,
-            date: form.querySelector('#record-date').value,
-            description: form.querySelector('#record-description').value.trim(),
-            budget: form.querySelector('#record-budget').value.trim(),
-            feedback: form.querySelector('#record-feedback').value.trim(),
-            link: form.querySelector('#record-link').value.trim(),
-            submitted: false,
-            createdAt: nowTW().toISOString()
-        };
+        const candidate = form.querySelector('#record-candidate').value;
+        const type = form.querySelector('input[name="record-type"]:checked')?.value;
+        const date = form.querySelector('#record-date').value;
+        const description = form.querySelector('#record-description').value.trim();
+        const budget = form.querySelector('#record-budget').value.trim();
+        const feedback = form.querySelector('#record-feedback').value.trim();
+        const link = form.querySelector('#record-link').value.trim();
 
-        if (!data.candidate || !data.type || !data.date || !data.description || !data.budget || !data.feedback || !data.link) {
+        if (!candidate || !type || !date || !description || !budget || !feedback || !link) {
             showToast('請填寫所有必填欄位', 'error');
             return;
         }
 
-        const dup = findDuplicateRecord(data);
+        const dup = findDuplicateRecord({ candidate, type, date, description });
         if (dup) {
             showToast('此活動回報已存在，請勿重複提交', 'error');
             return;
         }
 
         const params = {
-            [RECORD_FIELDS.candidate]: data.candidate,
-            [RECORD_FIELDS.type]: data.type,
-            ...buildDateParams(RECORD_FIELDS.date, data.date),
-            [RECORD_FIELDS.description]: data.description,
-            [RECORD_FIELDS.budget]: data.budget,
-            [RECORD_FIELDS.feedback]: data.feedback,
-            [RECORD_FIELDS.link]: data.link
+            [RECORD_FIELDS.candidate]: candidate,
+            [RECORD_FIELDS.type]: type,
+            ...buildDateParams(RECORD_FIELDS.date, date),
+            [RECORD_FIELDS.description]: description,
+            [RECORD_FIELDS.budget]: budget,
+            [RECORD_FIELDS.feedback]: feedback,
+            [RECORD_FIELDS.link]: link
         };
 
         const submitBtn = form.querySelector('button[type="submit"]');
@@ -660,21 +661,18 @@
         submitBtn.textContent = '提交中...';
 
         const ok = await submitToGoogleForm(RECORD_FORM_URL, params);
-        data.submitted = ok;
-        records.push(data);
-        saveRecords();
 
         submitBtn.disabled = false;
-        submitBtn.textContent = '儲存並提交';
-
-        closeModal('modal-record');
-        form.reset();
-        renderCalendar();
+        submitBtn.textContent = '提交至 Google 表單';
 
         if (ok) {
-            showToast('回報已儲存並提交至 Google 表單', 'success');
+            closeModal('modal-record');
+            form.reset();
+            await fetchRecords();
+            renderCalendar();
+            showToast('回報已提交至 Google 表單', 'success');
         } else {
-            showToast('已儲存本地，但提交 Google 表單失敗', 'error');
+            showToast('提交 Google 表單失敗', 'error');
         }
     }
 
@@ -718,16 +716,6 @@
         openModal('modal-record');
     }
 
-    function deleteEvent(id) {
-        if (!confirm('確定要刪除此回報紀錄？')) return;
-        records = records.filter(e => e.id !== id);
-        saveRecords();
-        closeModal('modal-detail');
-        renderCalendar();
-        document.getElementById('day-events').style.display = 'none';
-        showToast('已刪除', 'success');
-    }
-
     // Modal helpers
     function openModal(id) {
         document.getElementById(id).classList.add('active');
@@ -737,79 +725,10 @@
         document.getElementById(id).classList.remove('active');
     }
 
-    function exportEvents() {
-        if (records.length === 0) {
-            showToast('沒有回報紀錄可匯出', 'error');
-            return;
-        }
-        const blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        const today = toLocalDateStr(nowTW());
-        a.href = url;
-        a.download = `grass_records_${today}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        showToast(`已匯出 ${records.length} 筆回報紀錄`, 'success');
-    }
-
-    function importEvents(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-        e.target.value = '';
-
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            let imported;
-            try {
-                imported = JSON.parse(ev.target.result);
-            } catch {
-                showToast('檔案格式錯誤，請選擇有效的 JSON 檔案', 'error');
-                return;
-            }
-
-            if (!Array.isArray(imported)) {
-                showToast('檔案格式錯誤，預期為陣列', 'error');
-                return;
-            }
-
-            let addedCount = 0, skipCount = 0;
-            for (const item of imported) {
-                if (!item.id || !item.date) {
-                    skipCount++;
-                    continue;
-                }
-                if (records.some(existing => existing.id === item.id)) {
-                    skipCount++;
-                    continue;
-                }
-                item.formType = 'record';
-                records.push(item);
-                addedCount++;
-            }
-
-            saveRecords();
-            renderCalendar();
-
-            const parts = [];
-            if (addedCount) parts.push(`${addedCount} 筆匯入`);
-            if (skipCount) parts.push(`${skipCount} 筆略過（重複或無效）`);
-            showToast(parts.join('、'), addedCount ? 'success' : 'error');
-        };
-        reader.readAsText(file);
-    }
-
-    function clearAllEvents() {
-        if (records.length === 0) {
-            showToast('目前沒有回報紀錄', 'error');
-            return;
-        }
-        if (!confirm(`確定要清除全部 ${records.length} 筆回報紀錄？此操作無法復原。`)) return;
-        records = [];
-        saveRecords();
+    async function refreshData() {
+        await Promise.all([fetchPlans(), fetchRecords()]);
         renderCalendar();
-        document.getElementById('day-events').style.display = 'none';
-        showToast('已清除全部回報紀錄', 'success');
+        showToast('資料已重新載入', 'success');
     }
 
     // Bindings
@@ -863,17 +782,11 @@
         document.getElementById('form-plan').addEventListener('submit', handlePlanSubmit);
         document.getElementById('form-record').addEventListener('submit', handleRecordSubmit);
 
-        document.getElementById('btn-delete-event').addEventListener('click', () => {
-            if (selectedEventId) deleteEvent(selectedEventId);
-        });
-
         document.getElementById('btn-convert-to-record').addEventListener('click', () => {
             if (selectedEventId) convertToRecord(selectedEventId);
         });
 
-        document.getElementById('btn-export').addEventListener('click', exportEvents);
-        document.getElementById('btn-import').addEventListener('change', importEvents);
-        document.getElementById('btn-clear').addEventListener('click', clearAllEvents);
+        document.getElementById('btn-refresh').addEventListener('click', refreshData);
 
         document.querySelectorAll('.modal-close').forEach(btn => {
             btn.addEventListener('click', () => {
