@@ -1,7 +1,8 @@
 (() => {
     'use strict';
 
-    const STORAGE_KEY = 'grass_events';
+    const RECORD_STORAGE_KEY = 'grass_events_records';
+    const PLAN_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3htbbMcKTpcXNGMDDyhWwhd5LMvwn_d7eNFbNgKopQ90ysXeECP4687bLs5x-jCpi-5NTtcLxRFk7/pub?output=csv';
     const PLAN_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScpQgzx5xqgRLCu-7iKLCC4ph_cfCs1LNleJOOm7P63XnzaUg/formResponse';
     const RECORD_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScU3m-bGBen71ZKuH2RIQURd2Fszd2Cryp_n7Xl0sLkwXaclQ/formResponse';
 
@@ -43,11 +44,17 @@
     }
 
     let currentYear, currentMonth;
-    let events = [];
+    let plans = [];
+    let records = [];
     let selectedEventId = null;
 
-    function init() {
-        loadEvents();
+    function allEvents() {
+        return [...plans, ...records];
+    }
+
+    async function init() {
+        loadRecords();
+        await fetchPlans();
         const today = nowTW();
         currentYear = today.getFullYear();
         currentMonth = today.getMonth();
@@ -56,16 +63,100 @@
         initRepeatToggle();
     }
 
-    function loadEvents() {
+    function parseCSV(text) {
+        const rows = [];
+        let current = '';
+        let inQuotes = false;
+        let row = [];
+
+        for (let i = 0; i < text.length; i++) {
+            const ch = text[i];
+            if (inQuotes) {
+                if (ch === '"' && text[i + 1] === '"') {
+                    current += '"';
+                    i++;
+                } else if (ch === '"') {
+                    inQuotes = false;
+                } else {
+                    current += ch;
+                }
+            } else {
+                if (ch === '"') {
+                    inQuotes = true;
+                } else if (ch === ',') {
+                    row.push(current);
+                    current = '';
+                } else if (ch === '\n' || (ch === '\r' && text[i + 1] === '\n')) {
+                    row.push(current);
+                    current = '';
+                    if (row.length > 1 || row[0] !== '') rows.push(row);
+                    row = [];
+                    if (ch === '\r') i++;
+                } else {
+                    current += ch;
+                }
+            }
+        }
+        if (current || row.length) {
+            row.push(current);
+            if (row.length > 1 || row[0] !== '') rows.push(row);
+        }
+        return rows;
+    }
+
+    function normalizeDateStr(dateStr) {
+        const parts = dateStr.split('/');
+        if (parts.length !== 3) return dateStr;
+        return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+    }
+
+    async function fetchPlans() {
         try {
-            events = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            const res = await fetch(PLAN_CSV_URL);
+            if (!res.ok) throw new Error('fetch failed');
+            const text = await res.text();
+            const rows = parseCSV(text);
+            if (rows.length < 2) { plans = []; return; }
+
+            plans = [];
+            for (let i = 1; i < rows.length; i++) {
+                const r = rows[i];
+                if (r.length < 6) continue;
+                const timestamp = r[0];
+                const candidate = r[1];
+                const type = r[2];
+                const date = normalizeDateStr(r[3]);
+                const description = r[4];
+                const budget = r[5];
+
+                plans.push({
+                    id: 'plan-' + i + '-' + date + '-' + candidate,
+                    formType: 'plan',
+                    candidate,
+                    type,
+                    date,
+                    description,
+                    budget,
+                    timestamp,
+                    submitted: true
+                });
+            }
         } catch {
-            events = [];
+            plans = [];
+            showToast('無法載入計畫資料，請檢查網路連線', 'error');
         }
     }
 
-    function saveEvents() {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+    function loadRecords() {
+        try {
+            records = JSON.parse(localStorage.getItem(RECORD_STORAGE_KEY) || '[]');
+        } catch {
+            records = [];
+        }
+    }
+
+    function saveRecords() {
+        localStorage.setItem(RECORD_STORAGE_KEY, JSON.stringify(records));
     }
 
     function generateUUID() {
@@ -75,13 +166,21 @@
         );
     }
 
-    function findDuplicate(eventData) {
-        return events.find(e =>
-            e.formType === eventData.formType &&
-            e.candidate === eventData.candidate &&
-            e.type === eventData.type &&
-            e.date === eventData.date &&
-            e.description === eventData.description
+    function findDuplicatePlan(candidate, type, date, description) {
+        return plans.find(e =>
+            e.candidate === candidate &&
+            e.type === type &&
+            e.date === date &&
+            e.description === description
+        );
+    }
+
+    function findDuplicateRecord(data) {
+        return records.find(e =>
+            e.candidate === data.candidate &&
+            e.type === data.type &&
+            e.date === data.date &&
+            e.description === data.description
         );
     }
 
@@ -113,6 +212,7 @@
         const todayStr = toLocalDateStr(today);
 
         const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
+        const all = allEvents();
 
         for (let i = 0; i < totalCells; i++) {
             const cell = document.createElement('div');
@@ -143,7 +243,7 @@
             numEl.textContent = day;
             cell.appendChild(numEl);
 
-            const dayEvents = events.filter(e => e.date === dateStr);
+            const dayEvents = all.filter(e => e.date === dateStr);
             dayEvents.slice(0, 3).forEach(ev => {
                 const tag = document.createElement('div');
                 tag.className = `day-event type-${ev.formType}`;
@@ -170,7 +270,7 @@
     }
 
     function showDayEvents(dateStr) {
-        const dayEvents = events.filter(e => e.date === dateStr);
+        const dayEvents = allEvents().filter(e => e.date === dateStr);
         const panel = document.getElementById('day-events');
         const list = document.getElementById('day-events-list');
         document.getElementById('day-events-title').textContent = formatDate(dateStr) + ' 活動';
@@ -198,25 +298,48 @@
     }
 
     function showEventDetail(id) {
-        const ev = events.find(e => e.id === id);
+        const all = allEvents();
+        const ev = all.find(e => e.id === id);
         if (!ev) return;
 
         selectedEventId = id;
         document.getElementById('detail-title').textContent =
             `${ev.formType === 'plan' ? '計畫' : '回報'} - ${ev.candidate}`;
 
-        const statusClass = ev.submitted ? 'status-submitted' : 'status-local';
-        const statusText = ev.submitted ? '已提交 Google 表單' : '僅儲存本地';
-
         let html = `
             <div class="detail-row">
-                <div class="detail-label">UUID</div>
+                <div class="detail-label">ID</div>
                 <div class="detail-value detail-uuid">${escapeHtml(ev.id)}</div>
             </div>
-            <div class="detail-row">
-                <div class="detail-label">狀態</div>
-                <div class="detail-value"><span class="detail-status ${statusClass}">${statusText}</span></div>
-            </div>
+        `;
+
+        if (ev.formType === 'plan') {
+            html += `
+                <div class="detail-row">
+                    <div class="detail-label">狀態</div>
+                    <div class="detail-value"><span class="detail-status status-submitted">來自 Google 試算表</span></div>
+                </div>
+            `;
+            if (ev.timestamp) {
+                html += `
+                    <div class="detail-row">
+                        <div class="detail-label">提交時間</div>
+                        <div class="detail-value">${escapeHtml(ev.timestamp)}</div>
+                    </div>
+                `;
+            }
+        } else {
+            const statusClass = ev.submitted ? 'status-submitted' : 'status-local';
+            const statusText = ev.submitted ? '已提交 Google 表單' : '僅儲存本地';
+            html += `
+                <div class="detail-row">
+                    <div class="detail-label">狀態</div>
+                    <div class="detail-value"><span class="detail-status ${statusClass}">${statusText}</span></div>
+                </div>
+            `;
+        }
+
+        html += `
             <div class="detail-row">
                 <div class="detail-label">參選人</div>
                 <div class="detail-value">${escapeHtml(ev.candidate)}</div>
@@ -241,7 +364,7 @@
 
         if (ev.formType === 'record') {
             if (ev.planId) {
-                const plan = events.find(p => p.id === ev.planId);
+                const plan = all.find(p => p.id === ev.planId);
                 const planLabel = plan ? `${formatDate(plan.date)} ${plan.candidate} - ${plan.type}` : ev.planId;
                 html += `
                     <div class="detail-row">
@@ -266,6 +389,9 @@
 
         const convertBtn = document.getElementById('btn-convert-to-record');
         convertBtn.style.display = ev.formType === 'plan' ? '' : 'none';
+
+        const deleteBtn = document.getElementById('btn-delete-event');
+        deleteBtn.style.display = ev.formType === 'record' ? '' : 'none';
 
         openModal('modal-detail');
     }
@@ -419,19 +545,8 @@
 
         for (let i = 0; i < dates.length; i++) {
             const dateStr = dates[i];
-            const data = {
-                id: generateUUID(),
-                formType: 'plan',
-                candidate,
-                type,
-                date: dateStr,
-                description,
-                budget,
-                submitted: false,
-                createdAt: nowTW().toISOString()
-            };
 
-            const dup = findDuplicate(data);
+            const dup = findDuplicatePlan(candidate, type, dateStr, description);
             if (dup) {
                 skipCount++;
                 if (dates.length > 1) {
@@ -440,17 +555,14 @@
                 }
             } else {
                 const params = {
-                    [PLAN_FIELDS.candidate]: data.candidate,
-                    [PLAN_FIELDS.type]: data.type,
+                    [PLAN_FIELDS.candidate]: candidate,
+                    [PLAN_FIELDS.type]: type,
                     ...buildDateParams(PLAN_FIELDS.date, dateStr),
-                    [PLAN_FIELDS.description]: data.description,
-                    [PLAN_FIELDS.budget]: data.budget
+                    [PLAN_FIELDS.description]: description,
+                    [PLAN_FIELDS.budget]: budget
                 };
 
                 const ok = await submitToGoogleForm(PLAN_FORM_URL, params);
-                data.submitted = ok;
-                events.push(data);
-                saveEvents();
 
                 if (ok) {
                     okCount++;
@@ -460,7 +572,7 @@
                 } else {
                     errCount++;
                     if (dates.length > 1) {
-                        progressLog.innerHTML += `<div class="log-err">${formatDate(dateStr)} — 提交失敗（已儲存本地）</div>`;
+                        progressLog.innerHTML += `<div class="log-err">${formatDate(dateStr)} — 提交失敗</div>`;
                     }
                 }
                 if (dates.length > 1) progressLog.scrollTop = progressLog.scrollHeight;
@@ -475,8 +587,12 @@
 
         submitBtn.disabled = false;
         cancelBtn.disabled = false;
-        submitBtn.textContent = '儲存並提交';
-        renderCalendar();
+        submitBtn.textContent = '提交至 Google 表單';
+
+        if (okCount > 0) {
+            await fetchPlans();
+            renderCalendar();
+        }
 
         if (dates.length === 1) {
             closeModal('modal-plan');
@@ -485,9 +601,9 @@
             if (skipCount) {
                 showToast('此活動計畫已存在，請勿重複提交', 'error');
             } else if (okCount) {
-                showToast('計畫已儲存並提交至 Google 表單', 'success');
+                showToast('計畫已提交至 Google 表單', 'success');
             } else {
-                showToast('已儲存本地，但提交 Google 表單失敗', 'error');
+                showToast('提交 Google 表單失敗', 'error');
             }
         } else {
             progressText.textContent = '完成！';
@@ -523,7 +639,7 @@
             return;
         }
 
-        const dup = findDuplicate(data);
+        const dup = findDuplicateRecord(data);
         if (dup) {
             showToast('此活動回報已存在，請勿重複提交', 'error');
             return;
@@ -545,8 +661,8 @@
 
         const ok = await submitToGoogleForm(RECORD_FORM_URL, params);
         data.submitted = ok;
-        events.push(data);
-        saveEvents();
+        records.push(data);
+        saveRecords();
 
         submitBtn.disabled = false;
         submitBtn.textContent = '儲存並提交';
@@ -564,9 +680,9 @@
 
     function populatePlanPicker(selectedPlanId) {
         const picker = document.getElementById('record-plan-picker');
-        const plans = events.filter(e => e.formType === 'plan').sort((a, b) => a.date.localeCompare(b.date));
+        const sorted = [...plans].sort((a, b) => a.date.localeCompare(b.date));
         picker.innerHTML = '<option value="">— 手動填寫 —</option>';
-        plans.forEach(p => {
+        sorted.forEach(p => {
             const opt = document.createElement('option');
             opt.value = p.id;
             opt.textContent = `${formatDate(p.date)} ${p.candidate} - ${p.type}`;
@@ -589,7 +705,7 @@
     }
 
     function convertToRecord(planId) {
-        const plan = events.find(e => e.id === planId);
+        const plan = plans.find(e => e.id === planId);
         if (!plan) return;
 
         closeModal('modal-detail');
@@ -603,9 +719,9 @@
     }
 
     function deleteEvent(id) {
-        if (!confirm('確定要刪除此活動？')) return;
-        events = events.filter(e => e.id !== id);
-        saveEvents();
+        if (!confirm('確定要刪除此回報紀錄？')) return;
+        records = records.filter(e => e.id !== id);
+        saveRecords();
         closeModal('modal-detail');
         renderCalendar();
         document.getElementById('day-events').style.display = 'none';
@@ -622,19 +738,19 @@
     }
 
     function exportEvents() {
-        if (events.length === 0) {
-            showToast('沒有資料可匯出', 'error');
+        if (records.length === 0) {
+            showToast('沒有回報紀錄可匯出', 'error');
             return;
         }
-        const blob = new Blob([JSON.stringify(events, null, 2)], { type: 'application/json' });
+        const blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         const today = toLocalDateStr(nowTW());
         a.href = url;
-        a.download = `grass_events_${today}.json`;
+        a.download = `grass_records_${today}.json`;
         a.click();
         URL.revokeObjectURL(url);
-        showToast(`已匯出 ${events.length} 筆資料`, 'success');
+        showToast(`已匯出 ${records.length} 筆回報紀錄`, 'success');
     }
 
     function importEvents(e) {
@@ -659,19 +775,20 @@
 
             let addedCount = 0, skipCount = 0;
             for (const item of imported) {
-                if (!item.id || !item.formType || !item.date) {
+                if (!item.id || !item.date) {
                     skipCount++;
                     continue;
                 }
-                if (events.some(existing => existing.id === item.id)) {
+                if (records.some(existing => existing.id === item.id)) {
                     skipCount++;
                     continue;
                 }
-                events.push(item);
+                item.formType = 'record';
+                records.push(item);
                 addedCount++;
             }
 
-            saveEvents();
+            saveRecords();
             renderCalendar();
 
             const parts = [];
@@ -683,16 +800,16 @@
     }
 
     function clearAllEvents() {
-        if (events.length === 0) {
-            showToast('目前沒有任何資料', 'error');
+        if (records.length === 0) {
+            showToast('目前沒有回報紀錄', 'error');
             return;
         }
-        if (!confirm(`確定要清除全部 ${events.length} 筆資料？此操作無法復原。`)) return;
-        events = [];
-        saveEvents();
+        if (!confirm(`確定要清除全部 ${records.length} 筆回報紀錄？此操作無法復原。`)) return;
+        records = [];
+        saveRecords();
         renderCalendar();
         document.getElementById('day-events').style.display = 'none';
-        showToast('已清除全部資料', 'success');
+        showToast('已清除全部回報紀錄', 'success');
     }
 
     // Bindings
@@ -734,7 +851,7 @@
         document.getElementById('record-plan-picker').addEventListener('change', (e) => {
             const planId = e.target.value;
             if (!planId) return;
-            const plan = events.find(ev => ev.id === planId);
+            const plan = plans.find(ev => ev.id === planId);
             if (!plan) return;
             fillRecordFromPlan(plan);
         });
