@@ -130,10 +130,12 @@
             <form id="form-record">
                 <input type="hidden" id="record-from-plan" value="">
                 <div class="form-group">
-                    <label for="record-plan-picker">從計畫帶入資料</label>
-                    <select id="record-plan-picker">
-                        <option value="">— 手動填寫 —</option>
-                    </select>
+                    <label>從計畫帶入資料</label>
+                    <div class="searchable-select" id="plan-picker-wrapper">
+                        <input type="text" id="plan-picker-search" class="searchable-input" placeholder="搜尋計畫（輸入日期、姓名或類型）" autocomplete="off">
+                        <button type="button" class="searchable-clear" id="plan-picker-clear" style="display:none;">&times;</button>
+                        <div class="searchable-dropdown" id="plan-picker-dropdown"></div>
+                    </div>
                 </div>
                 <hr class="form-divider">
                 <div class="form-group">

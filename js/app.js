@@ -60,6 +60,7 @@
         renderCalendar();
         bindEvents();
         initRepeatToggle();
+        initPlanPicker();
     }
 
     function parseCSV(text) {
@@ -676,17 +677,96 @@
         }
     }
 
-    function populatePlanPicker(selectedPlanId) {
-        const picker = document.getElementById('record-plan-picker');
-        const sorted = [...plans].sort((a, b) => a.date.localeCompare(b.date));
-        picker.innerHTML = '<option value="">— 手動填寫 —</option>';
-        sorted.forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = p.id;
-            opt.textContent = `${formatDate(p.date)} ${p.candidate} - ${p.type}`;
-            if (p.id === selectedPlanId) opt.selected = true;
-            picker.appendChild(opt);
+    function initPlanPicker() {
+        const input = document.getElementById('plan-picker-search');
+        const dropdown = document.getElementById('plan-picker-dropdown');
+        const clearBtn = document.getElementById('plan-picker-clear');
+        let highlightIdx = -1;
+
+        function getFilteredPlans(query) {
+            const sorted = [...plans].sort((a, b) => b.date.localeCompare(a.date));
+            if (!query) return sorted;
+            const q = query.toLowerCase();
+            return sorted.filter(p =>
+                formatDate(p.date).includes(q) ||
+                p.date.includes(q) ||
+                p.candidate.toLowerCase().includes(q) ||
+                p.type.toLowerCase().includes(q) ||
+                p.description.toLowerCase().includes(q)
+            );
+        }
+
+        function renderDropdown(query) {
+            const filtered = getFilteredPlans(query);
+            highlightIdx = -1;
+            if (filtered.length === 0) {
+                dropdown.innerHTML = '<div class="searchable-empty">找不到符合的計畫</div>';
+            } else {
+                dropdown.innerHTML = filtered.map((p, i) => `
+                    <div class="searchable-option" data-id="${p.id}" data-index="${i}">
+                        <div><span class="option-date">${formatDate(p.date)}</span> ${escapeHtml(p.candidate)} - ${escapeHtml(p.type)}</div>
+                        <div class="option-detail">${escapeHtml(p.description.slice(0, 50))}</div>
+                    </div>
+                `).join('');
+            }
+            dropdown.classList.add('open');
+        }
+
+        function selectPlan(planId) {
+            const plan = plans.find(p => p.id === planId);
+            if (!plan) return;
+            input.value = `${formatDate(plan.date)} ${plan.candidate} - ${plan.type}`;
+            clearBtn.style.display = '';
+            dropdown.classList.remove('open');
+            fillRecordFromPlan(plan);
+        }
+
+        function clearSelection() {
+            input.value = '';
+            clearBtn.style.display = 'none';
+            document.getElementById('record-from-plan').value = '';
+        }
+
+        input.addEventListener('focus', () => renderDropdown(input.value));
+        input.addEventListener('input', () => renderDropdown(input.value));
+
+        input.addEventListener('keydown', (e) => {
+            const options = dropdown.querySelectorAll('.searchable-option');
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                highlightIdx = Math.min(highlightIdx + 1, options.length - 1);
+                options.forEach((o, i) => o.classList.toggle('highlighted', i === highlightIdx));
+                if (options[highlightIdx]) options[highlightIdx].scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                highlightIdx = Math.max(highlightIdx - 1, 0);
+                options.forEach((o, i) => o.classList.toggle('highlighted', i === highlightIdx));
+                if (options[highlightIdx]) options[highlightIdx].scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (highlightIdx >= 0 && options[highlightIdx]) {
+                    selectPlan(options[highlightIdx].dataset.id);
+                }
+            } else if (e.key === 'Escape') {
+                dropdown.classList.remove('open');
+                input.blur();
+            }
         });
+
+        dropdown.addEventListener('click', (e) => {
+            const opt = e.target.closest('.searchable-option');
+            if (opt) selectPlan(opt.dataset.id);
+        });
+
+        clearBtn.addEventListener('click', clearSelection);
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#plan-picker-wrapper')) {
+                dropdown.classList.remove('open');
+            }
+        });
+
+        window._planPicker = { selectPlan, clearSelection };
     }
 
     function fillRecordFromPlan(plan) {
@@ -710,8 +790,7 @@
 
         const form = document.getElementById('form-record');
         form.reset();
-        populatePlanPicker(planId);
-        fillRecordFromPlan(plan);
+        window._planPicker.selectPlan(planId);
 
         openModal('modal-record');
     }
@@ -763,16 +842,8 @@
         document.getElementById('btn-record').addEventListener('click', () => {
             document.getElementById('form-record').reset();
             document.getElementById('record-from-plan').value = '';
-            populatePlanPicker();
+            window._planPicker.clearSelection();
             openModal('modal-record');
-        });
-
-        document.getElementById('record-plan-picker').addEventListener('change', (e) => {
-            const planId = e.target.value;
-            if (!planId) return;
-            const plan = plans.find(ev => ev.id === planId);
-            if (!plan) return;
-            fillRecordFromPlan(plan);
         });
 
         document.getElementById('close-day-events').addEventListener('click', () => {
